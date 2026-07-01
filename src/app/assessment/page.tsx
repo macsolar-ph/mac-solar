@@ -130,7 +130,7 @@ export default function AssessmentPage() {
   useEffect(() => {
     try {
       sessionStorage.setItem("mac_assessment_step", step.toString());
-    } catch {}
+    } catch { }
 
     // Real-time step tracking: write current step to the database the moment
     // the user advances. This means exit_step is already persisted before any
@@ -143,9 +143,9 @@ export default function AssessmentPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, exitStep: step }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch {}
+    } catch { }
   }, [step]);
 
   const update = (partial: Partial<AssessmentFormData>) =>
@@ -249,15 +249,16 @@ export default function AssessmentPage() {
     setSubmitError(null);
     startTransition(async () => {
       try {
-        await submitAssessment(form);
+        const result = await submitAssessment(form);
+        if (result.error) {
+          setSubmitError(result.error);
+          scrollToError();
+          return;
+        }
         sessionStorage.setItem("mac_submitted", "1");
         router.push("/thank-you");
-      } catch (err) {
-        setSubmitError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong. Please try again."
-        );
+      } catch {
+        setSubmitError("Something went wrong. Please try again.");
         scrollToError();
       }
     });
@@ -284,8 +285,7 @@ export default function AssessmentPage() {
                 <button
                   type="button"
                   onClick={() => s.id < step && setStep(s.id)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 flex-shrink-0 ${
-                    step > s.id
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 flex-shrink-0 ${step > s.id
                       ? "bg-solar-500 text-white"
                       : step === s.id
                         /*
@@ -294,7 +294,7 @@ export default function AssessmentPage() {
                          */
                         ? "bg-brand-blue text-white ring-4 ring-brand-blue/15"
                         : "bg-navy-800/10 text-navy-800/30"
-                  }`}
+                    }`}
                 >
                   {step > s.id ? <Check className="w-3.5 h-3.5" /> : s.id}
                 </button>
@@ -409,13 +409,12 @@ export default function AssessmentPage() {
                       value={form.email}
                       onChange={(e) => update({ email: e.target.value })}
                       placeholder="you@example.com"
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border text-navy-800 placeholder:text-navy-800/30 focus:outline-none focus:ring-2 transition-all text-sm ${
-                        form.email && !emailValidation.valid
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl border text-navy-800 placeholder:text-navy-800/30 focus:outline-none focus:ring-2 transition-all text-sm ${form.email && !emailValidation.valid
                           ? "border-red-300 focus:ring-red-500/20 focus:border-red-400"
                           : form.email && emailValidation.valid
                             ? "border-green-400 focus:ring-green-500/20"
                             : "border-navy-800/15 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      }`}
+                        }`}
                     />
                     {form.email && emailValidation.valid && (
                       <div className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">

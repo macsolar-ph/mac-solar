@@ -13,17 +13,18 @@ const OTHER_APPLIANCE_QTY_MAX = 99;
 
 // ─── Customer: Submit Assessment ──────────────────────────────────────────────
 
-export async function submitAssessment(data: AssessmentFormData) {
+export async function submitAssessment(
+  data: AssessmentFormData
+): Promise<{ success?: boolean; error?: string }> {
   const supabase = await createClient();
 
   const emailCheck = validateEmail(data.email);
   if (!emailCheck.valid) {
-    throw new Error(emailCheck.error ?? "Invalid email address.");
+    return { error: emailCheck.error ?? "Invalid email address." };
   }
 
   const normalised = data.email.trim().toLowerCase();
 
-  // ── Blocked email guard ────────────────────────────────────────────────────
   const { data: blocked } = await supabase
     .from("blocked_emails")
     .select("email")
@@ -31,12 +32,9 @@ export async function submitAssessment(data: AssessmentFormData) {
     .maybeSingle();
 
   if (blocked) {
-    // Generic message — don't reveal that the email is explicitly blocked.
-    throw new Error("Unable to submit an assessment with this email address.");
+    return { error: "Unable to submit an assessment with this email address." };
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
-  // ── Duplicate email guard (blocks only while a pending assessment exists) ──
   const { data: existing } = await supabase
     .from("assessments")
     .select("id")
@@ -45,44 +43,39 @@ export async function submitAssessment(data: AssessmentFormData) {
     .maybeSingle();
 
   if (existing) {
-    throw new Error(
-      "You already have a pending assessment submitted with this email. Our team will review it and get back to you soon."
-    );
+    return {
+      error:
+        "You already have a pending assessment submitted with this email. Our team will review it and get back to you soon.",
+    };
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
-  // ── Other appliances: sanitize, filter, validate ───────────────────────────
   const sanitizedOther = (data.other_appliances ?? [])
     .map((a) => ({
       name: a.name.trim().replace(/[\x00-\x1F\x7F]/g, ""),
-      day:  Math.max(0, Math.min(OTHER_APPLIANCE_QTY_MAX, Math.floor(a.day))),
+      day: Math.max(0, Math.min(OTHER_APPLIANCE_QTY_MAX, Math.floor(a.day))),
       night: Math.max(0, Math.min(OTHER_APPLIANCE_QTY_MAX, Math.floor(a.night))),
     }))
     .filter((a) => a.name.length > 0 && a.day + a.night > 0);
 
   if (sanitizedOther.length > OTHER_APPLIANCE_MAX) {
-    throw new Error(`Maximum ${OTHER_APPLIANCE_MAX} custom appliances allowed.`);
+    return { error: `Maximum ${OTHER_APPLIANCE_MAX} custom appliances allowed.` };
   }
 
   for (const a of sanitizedOther) {
     if (a.name.length > OTHER_APPLIANCE_NAME_MAX) {
-      throw new Error(`Appliance name must be ${OTHER_APPLIANCE_NAME_MAX} characters or fewer.`);
+      return { error: `Appliance name must be ${OTHER_APPLIANCE_NAME_MAX} characters or fewer.` };
     }
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
   const { error } = await supabase.from("assessments").insert({
-    // Lighting & Fans
     lights_day: data.lights.day,
     lights_night: data.lights.night,
     fan_day: data.fan.day,
     fan_night: data.fan.night,
-    // Entertainment & Work
     tv_day: data.tv.day,
     tv_night: data.tv.night,
     desktop_day: data.desktop.day,
     desktop_night: data.desktop.night,
-    // Kitchen & Cooking
     ref_day: data.ref.day,
     ref_night: data.ref.night,
     rice_cooker_day: data.rice_cooker.day,
@@ -95,7 +88,6 @@ export async function submitAssessment(data: AssessmentFormData) {
     coffee_maker_night: data.coffee_maker.night,
     water_dispenser_day: data.water_dispenser.day,
     water_dispenser_night: data.water_dispenser.night,
-    // Air Conditioner
     ac_05hp_day: data.aircon.hp_0_5.day,
     ac_05hp_night: data.aircon.hp_0_5.night,
     ac_1hp_day: data.aircon.hp_1.day,
@@ -106,7 +98,6 @@ export async function submitAssessment(data: AssessmentFormData) {
     ac_2hp_night: data.aircon.hp_2.night,
     ac_25hp_day: data.aircon.hp_2_5_plus.day,
     ac_25hp_night: data.aircon.hp_2_5_plus.night,
-    // Water Pump
     wp_05hp_day: data.water_pump.hp_0_5.day,
     wp_05hp_night: data.water_pump.hp_0_5.night,
     wp_1hp_day: data.water_pump.hp_1.day,
@@ -117,20 +108,14 @@ export async function submitAssessment(data: AssessmentFormData) {
     wp_2hp_night: data.water_pump.hp_2.night,
     wp_3hp_day: data.water_pump.hp_3_plus.day,
     wp_3hp_night: data.water_pump.hp_3_plus.night,
-    // Personal Care & Utilities
     heater_day: data.shower_heater.day,
     heater_night: data.shower_heater.night,
     flat_iron_day: data.flat_iron.day,
     flat_iron_night: data.flat_iron.night,
-    // Electric Vehicle
     has_electric_car: data.has_electric_car,
     electric_car_qty: data.has_electric_car ? data.electric_car_qty : 0,
-    // Other Appliances
     other_appliances: sanitizedOther,
-    // Electricity & Location
-    monthly_bill_avg: data.monthly_bill_avg
-      ? parseFloat(data.monthly_bill_avg)
-      : null,
+    monthly_bill_avg: data.monthly_bill_avg ? parseFloat(data.monthly_bill_avg) : null,
     monthly_kwh: data.monthly_kwh ? parseFloat(data.monthly_kwh) : null,
     location_address: data.location_address || null,
     location_lat: data.location_lat,
@@ -141,12 +126,15 @@ export async function submitAssessment(data: AssessmentFormData) {
 
   if (error) {
     if (error.code === "23505") {
-      throw new Error(
-        "You already have a pending assessment submitted with this email. Our team will review it and get back to you soon."
-      );
+      return {
+        error:
+          "You already have a pending assessment submitted with this email. Our team will review it and get back to you soon.",
+      };
     }
-    throw new Error(error.message);
+    return { error: error.message };
   }
+
+  return { success: true };
 }
 
 // ─── Customer: Check Email Availability ───────────────────────────────────────
