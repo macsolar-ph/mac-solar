@@ -23,7 +23,7 @@ jobs:
       - name: Notify client on failure
         if: failure()
         run: |
-          curl -s -X POST "https://api.brevo.com/v3/smtp/email" \
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.brevo.com/v3/smtp/email" \
             -H "api-key: ${{ secrets.BREVO_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
@@ -31,4 +31,5 @@ jobs:
               "to": [{"email": "'"${{ secrets.CLIENT_NOTIFY_EMAIL }}"'"}],
               "subject": "Action needed: your website'"'"'s database needs a quick restart",
               "htmlContent": "<p>Hi,</p><p>Your website'"'"'s database has gone inactive and needs a quick restart to keep the site working properly.</p><p><b>Please do this:</b></p><ol><li>Go to <a href=\"https://supabase.com\">supabase.com</a> and log in</li><li>Open the mac-solar project</li><li>Click the <b>Restore</b> or <b>Resume</b> button</li></ol><p>The site should be back to normal within a couple of minutes after that.</p>"
-            }'
+            }')
+          echo "Brevo API response: $RESPONSE"
