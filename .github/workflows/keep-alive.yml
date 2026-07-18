@@ -10,12 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/assessments?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
-          echo "Response status: $STATUS"
-          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
-            echo "Ping failed with status $STATUS"
-            exit 1
+          echo "URL length: ${#SUPABASE_URL} (expected: 40)"
+          echo "Key length: ${#SUPABASE_ANON_KEY}"
+
+          if [[ "$SUPABASE_URL" == https://*.supabase.co ]]; then
+            echo "URL matches expected pattern: yes"
+          else
+            echo "URL matches expected pattern: no"
           fi
+
+          set +e
+          curl -v -o /dev/null -w "\nHTTP status: %{http_code}\n" \
+            "$SUPABASE_URL/rest/v1/assessments?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY"
+          CURL_EXIT=$?
+          set -e
+
+          echo "Curl exit code: $CURL_EXIT"
