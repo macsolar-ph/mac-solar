@@ -10,24 +10,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase REST API
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "URL length: ${#SUPABASE_URL} (expected: 40)"
-          echo "Key length: ${#SUPABASE_ANON_KEY}"
-
-          if [[ "$SUPABASE_URL" == https://*.supabase.co ]]; then
-            echo "URL matches expected pattern: yes"
-          else
-            echo "URL matches expected pattern: no"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/assessments?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "Response status: $STATUS"
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Ping failed with status $STATUS"
+            exit 1
           fi
 
-          set +e
-          curl -v -o /dev/null -w "\nHTTP status: %{http_code}\n" \
-            "$SUPABASE_URL/rest/v1/assessments?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY"
-          CURL_EXIT=$?
-          set -e
-
-          echo "Curl exit code: $CURL_EXIT"
+      - name: Notify client on failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.brevo.com/v3/smtp/email" \
+            -H "api-key: ${{ secrets.BREVO_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "sender": {"email": "'"${{ secrets.BREVO_SENDER_EMAIL }}"'", "name": "MAC Solar Website"},
+              "to": [{"email": "'"${{ secrets.CLIENT_NOTIFY_EMAIL }}"'"}],
+              "subject": "Action needed: your website'"'"'s database needs a quick restart",
+              "htmlContent": "<p>Hi,</p><p>Your website'"'"'s database has gone inactive and needs a quick restart to keep the site working properly.</p><p><b>Please do this:</b></p><ol><li>Go to <a href=\"https://supabase.com\">supabase.com</a> and log in</li><li>Open the mac-solar project</li><li>Click the <b>Restore</b> or <b>Resume</b> button</li></ol><p>The site should be back to normal within a couple of minutes after that.</p>"
+            }'
